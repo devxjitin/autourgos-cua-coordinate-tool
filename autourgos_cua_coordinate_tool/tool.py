@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional, Union
 
 from autourgos_agent import Tool, tool
 
+from .capture import CaptureError
 from .locator import CoordinateFinder, CoordinateNotFoundError
 
 __all__ = ["make_find_coordinates_tool"]
@@ -34,12 +35,14 @@ def make_find_coordinates_tool(
         screenshot_path: default image path used when the tool is called
             without an explicit ``image_path`` -- a fixed string, or a
             zero-arg callable returning a fresh path each call (matching
-            autourgos-preiteration's dynamic file-injection convention, e.g.
-            for a screenshot captured just before this iteration).
-        screen_width: screen width used to include a pixel dict alongside
-            the emitted normalized coordinates. width and height must both
-            be given for pixels to be included.
-        screen_height: screen height (see screen_width).
+            autourgos-preiteration's dynamic file-injection convention). If
+            this is also omitted, the tool auto-captures the current screen
+            (requires the optional `mss` dependency, the [capture] extra).
+        screen_width: fixes the screen width used for the pixel `x`/`y`
+            included alongside the emitted normalized coordinates (custom).
+            Omit to auto-detect it instead (automatic -- from an
+            auto-capture, or from the image via Pillow if installed).
+        screen_height: see screen_width.
         name: override the tool's exposed name.
     """
 
@@ -47,21 +50,26 @@ def make_find_coordinates_tool(
         """Find the on-screen coordinates of a described UI element.
 
         description: what to find, e.g. "the Submit button".
-        image_path: path to the screenshot to search. Optional if a default
-            screenshot_path was configured when this tool was created.
+        image_path: path to a specific screenshot to search. Optional --
+            falls back to the configured default screenshot_path, and if
+            that's also unset, auto-captures the current screen.
         """
         resolved_path = image_path or _resolve_default(screenshot_path)
-        if not resolved_path:
-            return {"found": False, "error": "No image_path given and no default screenshot_path configured."}
+        image_arg = resolved_path if resolved_path else None  # None -> auto-capture
 
         try:
-            coord = finder.find(resolved_path, description)
-        except CoordinateNotFoundError as exc:
+            coord = finder.find(
+                description,
+                image_arg,
+                screen_width=screen_width,
+                screen_height=screen_height,
+            )
+        except (CoordinateNotFoundError, CaptureError) as exc:
             return {"found": False, "error": str(exc)}
 
         result: Dict[str, Any] = {"found": True, "x_norm": coord.x_norm, "y_norm": coord.y_norm}
-        if screen_width and screen_height:
-            x_px, y_px = coord.to_pixels(screen_width, screen_height)
+        if coord.screen_width and coord.screen_height:
+            x_px, y_px = coord.to_pixels()
             result["x"] = x_px
             result["y"] = y_px
         return result

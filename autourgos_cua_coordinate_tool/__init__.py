@@ -17,14 +17,20 @@ Quick start::
     llm = OpenAIChatModel(model="gpt-4o")
     finder = CoordinateFinder(llm)
 
-    coord = finder.find("screenshot.png", "the Submit button")
+    # Automatic: capture the current screen and auto-detect its dimensions.
+    coord = finder.find("the Submit button")
+    x_px, y_px = coord.to_pixels()
+
+    # Custom: a specific screenshot and explicit dimensions.
+    coord = finder.find("the Submit button", "screenshot.png")
     x_px, y_px = coord.to_pixels(1920, 1080)
 
-    # Or as an agent tool:
-    tool = make_find_coordinates_tool(finder, screen_width=1920, screen_height=1080)
+    # Or as an agent tool (auto-capture/auto-detect by default):
+    tool = make_find_coordinates_tool(finder)
     agent.add_tools(tool)
 """
 
+from .capture import CaptureError, ScreenCapture, capture_screen, detect_image_size
 from .locator import Coordinate, CoordinateFinder, CoordinateNotFoundError
 from .tool import make_find_coordinates_tool
 
@@ -32,11 +38,15 @@ try:
     from importlib.metadata import version as _meta_version
     __version__ = _meta_version("autourgos-cua-coordinate-tool")
 except Exception:
-    __version__ = "0.1.0"
+    __version__ = "0.2.0"
 
 __all__ = [
     "Coordinate",
     "CoordinateFinder",
     "CoordinateNotFoundError",
     "make_find_coordinates_tool",
+    "CaptureError",
+    "ScreenCapture",
+    "capture_screen",
+    "detect_image_size",
 ]

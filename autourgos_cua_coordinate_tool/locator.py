@@ -14,10 +14,13 @@ either of those packages -- any object exposing that duck-typed shape works.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Optional, Tuple
+
+from .capture import capture_screen, detect_image_size
 
 __all__ = ["Coordinate", "CoordinateFinder", "CoordinateNotFoundError"]
 
@@ -59,13 +62,36 @@ class Coordinate:
     x_norm: float
     y_norm: float
     raw_response: str
+    # Best-effort screen dimensions detected at find()/afind() time -- either
+    # from an auto-capture, or auto-detected (via Pillow) from a caller-given
+    # image. None if neither was available; to_pixels() still accepts an
+    # explicit override regardless.
+    screen_width: Optional[int] = None
+    screen_height: Optional[int] = None
 
-    def to_pixels(self, screen_width: int, screen_height: int) -> Tuple[int, int]:
-        """Denormalize to actual screen pixels using Gemini's documented formula."""
-        if screen_width <= 0 or screen_height <= 0:
-            raise ValueError("screen_width and screen_height must be positive.")
-        x_px = int(self.x_norm / 1000 * screen_width)
-        y_px = int(self.y_norm / 1000 * screen_height)
+    def to_pixels(
+        self,
+        screen_width: Optional[int] = None,
+        screen_height: Optional[int] = None,
+    ) -> Tuple[int, int]:
+        """
+        Denormalize to actual screen pixels using Gemini's documented formula.
+
+        Pass screen_width/screen_height explicitly to force conversion
+        against those dimensions (custom); omit both to use the dimensions
+        auto-detected when this Coordinate was found (automatic) -- raises
+        ValueError if neither is available.
+        """
+        width = screen_width if screen_width is not None else self.screen_width
+        height = screen_height if screen_height is not None else self.screen_height
+        if not width or not height or width <= 0 or height <= 0:
+            raise ValueError(
+                "No positive screen_width/screen_height available -- pass them "
+                "explicitly, or find()/afind() with a source that lets them be "
+                "auto-detected (auto-captured screen, or an image Pillow can read)."
+            )
+        x_px = int(self.x_norm / 1000 * width)
+        y_px = int(self.y_norm / 1000 * height)
         return x_px, y_px
 
 
@@ -138,16 +164,68 @@ class CoordinateFinder:
             kwargs.setdefault("image_detail", self.image_detail)
         return kwargs
 
-    def find(self, image: Any, description: str, **overrides: Any) -> Coordinate:
-        """Locate ``description`` in ``image`` (a file path or bytes). Raises
-        CoordinateNotFoundError if the element isn't visible or the response
-        can't be parsed."""
-        prompt = self._build_prompt(description)
-        response = self.llm.invoke(prompt, files=[image], **self._invoke_kwargs(overrides))
-        return _parse_response(response if isinstance(response, str) else str(response))
+    @staticmethod
+    def _resolve_image(image: Any) -> Tuple[Any, Optional[int], Optional[int]]:
+        """(image_to_send, detected_width, detected_height). image=None auto-
+        captures the current screen (dimensions come free from the capture);
+        a given image has its dimensions best-effort auto-detected via Pillow."""
+        if image is None:
+            capture = capture_screen()
+            return capture.image_bytes, capture.width, capture.height
+        size = detect_image_size(image)
+        if size is None:
+            return image, None, None
+        return image, size[0], size[1]
 
-    async def afind(self, image: Any, description: str, **overrides: Any) -> Coordinate:
-        """Async twin of find()."""
+    def find(
+        self,
+        description: str,
+        image: Any = None,
+        *,
+        screen_width: Optional[int] = None,
+        screen_height: Optional[int] = None,
+        **overrides: Any,
+    ) -> Coordinate:
+        """
+        Locate ``description`` on screen. Raises CoordinateNotFoundError if
+        the element isn't visible or the response can't be parsed.
+
+        image: file path or bytes for a specific screenshot (custom); omit
+            (default) to auto-capture the current screen instead (requires
+            the optional `mss` dependency -- the [capture] extra).
+        screen_width/screen_height: pass explicitly to fix the dimensions
+            used by the returned Coordinate.to_pixels() (custom); omit to
+            auto-detect them instead (from the auto-capture itself, or from
+            ``image`` via Pillow if installed -- the [images] extra).
+        """
+        resolved_image, detected_w, detected_h = self._resolve_image(image)
+        width = screen_width if screen_width is not None else detected_w
+        height = screen_height if screen_height is not None else detected_h
+
         prompt = self._build_prompt(description)
-        response = await self.llm.ainvoke(prompt, files=[image], **self._invoke_kwargs(overrides))
-        return _parse_response(response if isinstance(response, str) else str(response))
+        response = self.llm.invoke(prompt, files=[resolved_image], **self._invoke_kwargs(overrides))
+        coord = _parse_response(response if isinstance(response, str) else str(response))
+        return replace(coord, screen_width=width, screen_height=height)
+
+    async def afind(
+        self,
+        description: str,
+        image: Any = None,
+        *,
+        screen_width: Optional[int] = None,
+        screen_height: Optional[int] = None,
+        **overrides: Any,
+    ) -> Coordinate:
+        """Async twin of find()."""
+        if image is None:
+            capture = await asyncio.to_thread(capture_screen)
+            resolved_image, detected_w, detected_h = capture.image_bytes, capture.width, capture.height
+        else:
+            resolved_image, detected_w, detected_h = self._resolve_image(image)
+        width = screen_width if screen_width is not None else detected_w
+        height = screen_height if screen_height is not None else detected_h
+
+        prompt = self._build_prompt(description)
+        response = await self.llm.ainvoke(prompt, files=[resolved_image], **self._invoke_kwargs(overrides))
+        coord = _parse_response(response if isinstance(response, str) else str(response))
+        return replace(coord, screen_width=width, screen_height=height)

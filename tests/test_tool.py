@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from autourgos_cua_coordinate_tool import CoordinateFinder, make_find_coordinates_tool
+from autourgos_cua_coordinate_tool.capture import CaptureError, ScreenCapture
 
 
 class FakeLLM:
@@ -32,7 +34,9 @@ class TestToolShape(unittest.TestCase):
         self.assertEqual(t["name"], "locate_ui_element")
 
 
-class TestToolInvocation(unittest.TestCase):
+class TestToolInvocationCustom(unittest.TestCase):
+    """Explicit image_path / screen dims (the 'custom' path)."""
+
     def test_explicit_image_path_normalized_only(self):
         finder = CoordinateFinder(FakeLLM('{"found": true, "x": 250, "y": 750}'))
         t = make_find_coordinates_tool(finder)
@@ -81,14 +85,44 @@ class TestToolInvocation(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
 
-    def test_missing_image_path_and_no_default_errors_cleanly(self):
+
+class TestToolInvocationAutomatic(unittest.TestCase):
+    """No image_path and no screenshot_path configured -> auto-capture (the
+    'automatic' path), with dimensions auto-detected from that capture."""
+
+    def test_auto_captures_and_includes_autodetected_pixels(self):
+        finder = CoordinateFinder(FakeLLM('{"found": true, "x": 500, "y": 500}'))
+        t = make_find_coordinates_tool(finder)
+        fake_capture = ScreenCapture(image_bytes=b"png-bytes", width=1920, height=1080)
+
+        with patch("autourgos_cua_coordinate_tool.locator.capture_screen", return_value=fake_capture):
+            result = t.func("something")
+
+        self.assertTrue(result["found"])
+        self.assertEqual(result["x"], 960)
+        self.assertEqual(result["y"], 540)
+
+    def test_capture_error_returns_clean_error_dict_not_a_crash(self):
         finder = CoordinateFinder(FakeLLM('{"found": true, "x": 1, "y": 1}'))
         t = make_find_coordinates_tool(finder)
 
-        result = t.func("something")
+        with patch(
+            "autourgos_cua_coordinate_tool.locator.capture_screen",
+            side_effect=CaptureError("mss not installed"),
+        ):
+            result = t.func("something")
 
         self.assertFalse(result["found"])
         self.assertIn("error", result)
+
+    def test_explicit_image_path_skips_auto_capture(self):
+        finder = CoordinateFinder(FakeLLM('{"found": true, "x": 1, "y": 1}'))
+        t = make_find_coordinates_tool(finder)
+
+        with patch("autourgos_cua_coordinate_tool.locator.capture_screen") as mocked:
+            t.func("something", "shot.png")
+
+        mocked.assert_not_called()
 
 
 if __name__ == "__main__":
