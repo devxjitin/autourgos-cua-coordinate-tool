@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.0] - 2026-09-02
+
+- First PyPI release. No functional change from 0.2.0 -- version set to
+  1.0.0 for the initial public PyPI publish per explicit request.
+
 ## [0.2.0] - 2026-09-02
 
 - Added: automatic screenshot capture and automatic screen-dimension

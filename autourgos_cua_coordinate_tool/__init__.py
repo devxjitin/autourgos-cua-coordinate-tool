@@ -38,7 +38,7 @@ try:
     from importlib.metadata import version as _meta_version
     __version__ = _meta_version("autourgos-cua-coordinate-tool")
 except Exception:
-    __version__ = "0.2.0"
+    __version__ = "1.0.0"
 
 __all__ = [
     "Coordinate",
