@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1] - 2026-09-03
+
+- Added `features.md` documenting the module's feature set and a competitor comparison. No code changes.
+
+
 ## [1.0.0] - 2026-09-02
 
 - First PyPI release. No functional change from 0.2.0 -- version set to
