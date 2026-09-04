@@ -36,7 +36,7 @@ from .tool import make_find_coordinates_tool
 
 from autourgos_core import package_version
 
-__version__ = package_version("autourgos-cua-coordinate-tool", fallback="1.0.2")
+__version__ = package_version("autourgos-cua-coordinate-tool", fallback="1.0.3")
 
 __all__ = [
     "Coordinate",

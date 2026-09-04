@@ -49,10 +49,11 @@ def make_find_coordinates_tool(
     def find_coordinates(description: str, image_path: str = "") -> Dict[str, Any]:
         """Find the on-screen coordinates of a described UI element.
 
-        description: what to find, e.g. "the Submit button".
-        image_path: path to a specific screenshot to search. Optional --
-            falls back to the configured default screenshot_path, and if
-            that's also unset, auto-captures the current screen.
+        Args:
+            description: what to find, e.g. "the Submit button".
+            image_path: path to a specific screenshot to search. Optional --
+                falls back to the configured default screenshot_path, and if
+                that's also unset, auto-captures the current screen.
         """
         resolved_path = image_path or _resolve_default(screenshot_path)
         image_arg = resolved_path if resolved_path else None  # None -> auto-capture

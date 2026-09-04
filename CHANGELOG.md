@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.3] - 2026-09-04
+
+- **Fixed:** `find()`/`afind()` used to `str()` the whole raw LLM response instead of extracting its `"response"` key -- an LLM wrapper constructed with `structured_output=True` (autourgos-openaichat/autourgos-responses) returns a metadata dict, and `str(dict)` produced a garbled Python-repr blob (`coord.raw_response` ended up as that whole blob; x/y parsing could get lucky via the prose-fallback regex or fail outright). Now uses `autourgos_core.extract_text()`. Live-verified against real Azure.
+- **Fixed:** `find_coordinates()`'s docstring had bare `description:`/`image_path:` lines with no `Args:` header -- `@tool`'s strict docstring parser requires that header, so both param descriptions silently ended up empty in the tool's JSON schema. Header added.
+- Bumped `autourgos-core>=0.4.0` (for `extract_text()`).
+
 ## [1.0.2] - 2026-09-04
 
 - Internal: `__version__` resolution moved to `autourgos_core.package_version()` (new `autourgos-core>=0.3.0` dependency). No functional change.

@@ -33,6 +33,18 @@ class TestToolShape(unittest.TestCase):
         t = make_find_coordinates_tool(self.finder, name="locate_ui_element")
         self.assertEqual(t["name"], "locate_ui_element")
 
+    def test_param_descriptions_are_not_empty(self):
+        """
+        Regression: find_coordinates()'s docstring used to have bare
+        "description: ..."/"image_path: ..." lines with no "Args:" header
+        -- autourgos-agent's @tool decorator requires that header to parse
+        param descriptions at all, so both silently ended up as "".
+        """
+        t = make_find_coordinates_tool(self.finder)
+        props = t["parameters"]["properties"]
+        self.assertTrue(props["description"]["description"])
+        self.assertTrue(props["image_path"]["description"])
+
 
 class TestToolInvocationCustom(unittest.TestCase):
     """Explicit image_path / screen dims (the 'custom' path)."""

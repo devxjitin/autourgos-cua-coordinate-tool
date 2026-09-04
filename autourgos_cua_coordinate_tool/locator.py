@@ -20,6 +20,8 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any, Optional, Tuple
 
+from autourgos_core import extract_text
+
 from .capture import capture_screen, detect_image_size
 
 __all__ = ["Coordinate", "CoordinateFinder", "CoordinateNotFoundError"]
@@ -204,7 +206,7 @@ class CoordinateFinder:
 
         prompt = self._build_prompt(description)
         response = self.llm.invoke(prompt, files=[resolved_image], **self._invoke_kwargs(overrides))
-        coord = _parse_response(response if isinstance(response, str) else str(response))
+        coord = _parse_response(extract_text(response))
         return replace(coord, screen_width=width, screen_height=height)
 
     async def afind(
@@ -227,5 +229,5 @@ class CoordinateFinder:
 
         prompt = self._build_prompt(description)
         response = await self.llm.ainvoke(prompt, files=[resolved_image], **self._invoke_kwargs(overrides))
-        coord = _parse_response(response if isinstance(response, str) else str(response))
+        coord = _parse_response(extract_text(response))
         return replace(coord, screen_width=width, screen_height=height)

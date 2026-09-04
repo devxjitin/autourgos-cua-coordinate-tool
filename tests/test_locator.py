@@ -68,6 +68,41 @@ class TestFindHappyPath(unittest.TestCase):
         with self.assertRaises(ValueError):
             coord.to_pixels()
 
+    def test_structured_output_dict_response_is_extracted_correctly(self):
+        """
+        Regression: find()/afind() used to str() the whole raw response
+        instead of extracting its "response" key -- an LLM wrapper
+        constructed with structured_output=True (autourgos-openaichat/
+        autourgos-responses) returns a metadata dict, not a plain string.
+        str(dict) produced an unparseable Python-repr blob; the x/y values
+        could occasionally still be recovered by the prose-fallback regex
+        matching lucky substrings of that blob, but raw_response ended up
+        as the whole garbled dict repr instead of the model's actual text
+        -- asserted here since it's the one difference that doesn't depend
+        on fallback-regex luck.
+        """
+        model_text = '{"found": true, "x": 640, "y": 360}'
+        llm = FakeLLM({
+            "model": "gpt-4o", "response": model_text,
+            "input_tokens": 50, "output_tokens": 12,
+        })
+        finder = CoordinateFinder(llm)
+
+        coord = finder.find("a button", "shot.png")
+
+        self.assertEqual((coord.x_norm, coord.y_norm), (640.0, 360.0))
+        self.assertEqual(coord.raw_response, model_text)
+
+    def test_afind_structured_output_dict_response_is_extracted_correctly(self):
+        model_text = '{"found": true, "x": 100, "y": 200}'
+        llm = FakeLLM({"model": "gpt-4o", "response": model_text})
+        finder = CoordinateFinder(llm)
+
+        coord = asyncio.run(finder.afind("a button", "shot.png"))
+
+        self.assertEqual((coord.x_norm, coord.y_norm), (100.0, 200.0))
+        self.assertEqual(coord.raw_response, model_text)
+
     def test_to_pixels_rejects_non_positive_dimensions(self):
         coord = Coordinate(x_norm=1, y_norm=1, raw_response="")
         with self.assertRaises(ValueError):
