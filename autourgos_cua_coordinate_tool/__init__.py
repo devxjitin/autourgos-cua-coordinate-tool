@@ -34,11 +34,9 @@ from .capture import CaptureError, ScreenCapture, capture_screen, detect_image_s
 from .locator import Coordinate, CoordinateFinder, CoordinateNotFoundError
 from .tool import make_find_coordinates_tool
 
-try:
-    from importlib.metadata import version as _meta_version
-    __version__ = _meta_version("autourgos-cua-coordinate-tool")
-except Exception:
-    __version__ = "1.0.1"
+from autourgos_core import package_version
+
+__version__ = package_version("autourgos-cua-coordinate-tool", fallback="1.0.2")
 
 __all__ = [
     "Coordinate",

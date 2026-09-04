@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autourgos-cua-coordinate-tool"
-version = "1.0.1"
+version = "1.0.2"
 description = "LLM-grounded UI coordinate finding for Autourgos computer-use agents — locates a described UI element in a screenshot and returns its position normalized to a 0-1000 scale (Gemini computer-use's coordinate convention)."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,7 +27,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["autourgos-agent>=3.1.1"]
+dependencies = ["autourgos-agent>=3.1.1", "autourgos-core>=0.3.0"]
 
 [project.optional-dependencies]
 images = ["Pillow>=9.0"]
