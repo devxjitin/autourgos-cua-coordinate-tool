@@ -47,10 +47,6 @@ Element to find: {description}
 """
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
-_XY_FALLBACK_RE = re.compile(
-    r'"?x"?\s*[:=]\s*(-?\d+(?:\.\d+)?).{0,40}?"?y"?\s*[:=]\s*(-?\d+(?:\.\d+)?)',
-    re.DOTALL,
-)
 
 
 class CoordinateNotFoundError(Exception):
@@ -117,11 +113,8 @@ def _parse_response(text: str) -> Coordinate:
         if "x" in data and "y" in data:
             return _validated_coordinate(data["x"], data["y"], text)
 
-    # Fallback: pull the first x/y-looking pair out of prose.
-    match = _XY_FALLBACK_RE.search(text)
-    if match:
-        return _validated_coordinate(match.group(1), match.group(2), text)
-
+    # No prose fallback: fails closed rather than fabricating a coordinate
+    # from an unrelated x/y-looking substring in free text (see features.md).
     raise CoordinateNotFoundError(f"Could not parse a coordinate from model response: {text!r}")
 
 
@@ -223,7 +216,7 @@ class CoordinateFinder:
             capture = await asyncio.to_thread(capture_screen)
             resolved_image, detected_w, detected_h = capture.image_bytes, capture.width, capture.height
         else:
-            resolved_image, detected_w, detected_h = self._resolve_image(image)
+            resolved_image, detected_w, detected_h = await asyncio.to_thread(self._resolve_image, image)
         width = screen_width if screen_width is not None else detected_w
         height = screen_height if screen_height is not None else detected_h
 

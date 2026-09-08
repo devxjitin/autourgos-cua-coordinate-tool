@@ -51,7 +51,7 @@ class TestToolInvocationCustom(unittest.TestCase):
 
     def test_explicit_image_path_normalized_only(self):
         finder = CoordinateFinder(FakeLLM('{"found": true, "x": 250, "y": 750}'))
-        t = make_find_coordinates_tool(finder)
+        t = make_find_coordinates_tool(finder, allowed_dirs=["."])
 
         result = t.func("the Submit button", "shot.png")
 
@@ -59,7 +59,9 @@ class TestToolInvocationCustom(unittest.TestCase):
 
     def test_pixels_included_when_screen_dims_configured(self):
         finder = CoordinateFinder(FakeLLM('{"found": true, "x": 500, "y": 500}'))
-        t = make_find_coordinates_tool(finder, screen_width=1000, screen_height=800)
+        t = make_find_coordinates_tool(
+            finder, screen_width=1000, screen_height=800, allowed_dirs=["."]
+        )
 
         result = t.func("something", "shot.png")
 

@@ -49,13 +49,15 @@ class TestFindHappyPath(unittest.TestCase):
 
         self.assertEqual((coord.x_norm, coord.y_norm), (10.0, 20.0))
 
-    def test_prose_fallback_parsing(self):
+    def test_prose_response_fails_closed_not_fabricated(self):
+        """Regression: an earlier regex fallback pulled an x/y-looking pair
+        out of any prose, contradicting features.md's "never fabricates a
+        coordinate" guarantee. It must now raise instead."""
         llm = FakeLLM('Sure, I found it at x: 300, y: 450 roughly.')
         finder = CoordinateFinder(llm)
 
-        coord = finder.find("a button", "shot.png")
-
-        self.assertEqual((coord.x_norm, coord.y_norm), (300.0, 450.0))
+        with self.assertRaises(CoordinateNotFoundError):
+            finder.find("a button", "shot.png")
 
     def test_to_pixels_matches_gemini_formula(self):
         coord = Coordinate(x_norm=500, y_norm=250, raw_response="")
