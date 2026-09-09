@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-09-09
+
+- **Security fix:** `find_coordinates(image_path=...)` was an LLM-callable, unvalidated local file path forwarded straight to the vision API -- a prompt-injectable arbitrary-local-file-read-and-exfiltrate primitive. `image_path` must now resolve inside a configured `allowed_dirs` (or `screenshot_path`'s own directory) and have an image extension, or the call is rejected. **Breaking:** an explicit `image_path` now requires `allowed_dirs=`/`screenshot_path=` to be configured on `make_find_coordinates_tool()`; previously any path was accepted.
+- **Fixed:** removed the prose regex fallback that could fabricate a coordinate from an unrelated x/y-looking substring in free text, contradicting the documented "never fabricates a coordinate" guarantee -- parsing now fails closed on anything that isn't valid `{x, y}` JSON.
+- **Fixed:** `afind()`'s custom-image branch now runs `_resolve_image()` (Pillow file I/O) via `asyncio.to_thread`, matching the auto-capture branch, so it no longer blocks the event loop for concurrent `ainvoke()` callers.
+
 ## [1.0.3] - 2026-09-04
 
 - **Fixed:** `find()`/`afind()` used to `str()` the whole raw LLM response instead of extracting its `"response"` key -- an LLM wrapper constructed with `structured_output=True` (autourgos-openaichat/autourgos-responses) returns a metadata dict, and `str(dict)` produced a garbled Python-repr blob (`coord.raw_response` ended up as that whole blob; x/y parsing could get lucky via the prose-fallback regex or fail outright). Now uses `autourgos_core.extract_text()`. Live-verified against real Azure.
