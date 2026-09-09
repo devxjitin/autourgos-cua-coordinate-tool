@@ -20,9 +20,10 @@ normalized on-screen coordinate for that element, using any vision-capable LLM t
 - **Fails closed** — raises `CoordinateNotFoundError` (never a fabricated/guessed coordinate) when the
   model reports the element isn't visible, the response can't be parsed, or a parsed coordinate falls
   outside 0-1000; raises `CaptureError` if auto-capture is requested without `mss` installed
-- **Ready-made agent tool** — `make_find_coordinates_tool()` wraps a `CoordinateFinder` as a standard
-  `autourgos-agent` `Tool` for `agent.add_tools(...)`, returning a structured
-  `{"found": bool, "x_norm", "y_norm", "x"?, "y"?, "error"?}` dict
+- **Ready-made agent tool** — `CoordinateFinderTool(llm)` is a standard `autourgos-agent` `Tool` for
+  `agent.add_tools(...)`, taking just an LLM and a `target` description and returning a structured
+  `{"found": bool, "x_norm", "y_norm", "x"?, "y"?, "error"?}` dict; every call auto-captures the current
+  screen into memory
 - **Sync and async** — `find()` / `afind()`
 - Lower-level helpers exposed directly: `capture_screen()`, `detect_image_size()`
 - Minimal footprint: core library has no hard dependency on `mss`/`Pillow`; both are optional extras

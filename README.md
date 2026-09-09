@@ -8,61 +8,27 @@
 LLM-grounded UI coordinate finding for [Autourgos](https://github.com/devxjitin) computer-use agents.
 Give it a description ("the Submit button") and it returns where that element is —
 normalized to a 0-1000 scale, the same convention
-[Gemini's computer-use API](https://ai.google.dev/gemini-api/docs/computer-use) uses. It can
-auto-capture the current screen and auto-detect screen dimensions, or take an explicit
-screenshot/dimensions instead — both paths are always available.
+[Gemini's computer-use API](https://ai.google.dev/gemini-api/docs/computer-use) uses.
 
-```python
-from autourgos_cua_coordinate_tool import CoordinateFinder
-from autourgos_openaichat import OpenAIChatModel
+There are two ways to use this package — pick one:
 
-llm = OpenAIChatModel(model="gpt-4o")
-finder = CoordinateFinder(llm)
-
-# Automatic: capture the current screen and auto-detect its dimensions.
-coord = finder.find("the Submit button")
-x_px, y_px = coord.to_pixels()
-
-# Custom: a specific screenshot and explicit dimensions.
-coord = finder.find("the Submit button", "screenshot.png")
-x_px, y_px = coord.to_pixels(1920, 1080)
-```
-
----
-
-## Features
-
-- **Provider-agnostic grounding** — drives any vision-capable LLM shaped like
-  [`autourgos-openaichat`](https://github.com/devxjitin/autourgos-openaichat)'s or
-  [`autourgos-responses`](https://github.com/devxjitin/autourgos-responses)'s `BaseLLM`
-  (`invoke(prompt, files=, **overrides)` / `ainvoke(...)`). No hard dependency on either
-  package, and no coupling to one vision API.
-- **Automatic *and* custom screenshots** — omit `image` to auto-capture the current
-  screen (optional `mss` dependency), or pass a specific file path/bytes yourself.
-- **Automatic *and* custom screen dimensions** — omit `screen_width`/`screen_height` to
-  auto-detect them (free from an auto-capture, or via optional `Pillow` for a
-  caller-supplied image), or pass them explicitly to force a specific conversion.
-- **Gemini-style normalized coordinates** — output is always 0-1000 on both axes
-  regardless of screenshot resolution, matching Gemini computer-use's own convention,
-  with `.to_pixels()` doing the documented denormalization.
-- **Fails closed** — an element the model can't find, or a response that can't be
-  parsed, raises `CoordinateNotFoundError` instead of returning a fabricated coordinate.
-- **Ready-made agent tool** — `make_find_coordinates_tool()` wraps a `CoordinateFinder`
-  as a standard [`autourgos-agent`](https://github.com/devxjitin/autourgos-agent) `Tool`
-  for `agent.add_tools(...)`.
-- **Sync and async** — `find()` / `afind()`.
+| | Use when | Screenshot |
+|---|---|---|
+| [`CoordinateFinder`](#use-case-1-coordinatefinder-library) | You're calling it directly from your own code. | Automatic (auto-capture) *or* custom (a specific file/bytes) — your choice per call. |
+| [`CoordinateFinderTool`](#use-case-2-coordinatefindertool-agent-tool) | You want to hand it to an `autourgos-agent` `Agent` as a tool. | Always automatic — auto-captures the screen into memory on every call. |
 
 ---
 
 ## Table of Contents
 
 - [Install](#install)
-- [Quick Start](#quick-start)
-- [Automatic vs Custom](#automatic-vs-custom)
-- [Async](#async)
-- [As an Agent Tool](#as-an-agent-tool)
+- [Use Case 1: `CoordinateFinder` (library)](#use-case-1-coordinatefinder-library)
+  - [Automatic screenshot](#automatic-screenshot)
+  - [Custom screenshot](#custom-screenshot)
+  - [Async](#async)
+  - [Error handling](#error-handling)
+- [Use Case 2: `CoordinateFinderTool` (agent tool)](#use-case-2-coordinatefindertool-agent-tool)
 - [Coordinate System](#coordinate-system)
-- [Error Handling](#error-handling)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -74,20 +40,30 @@ x_px, y_px = coord.to_pixels(1920, 1080)
 pip install autourgos-cua-coordinate-tool
 ```
 
-For automatic screen capture (`mss`) and/or automatic image dimension detection
-(`Pillow`):
+Optional extras:
 
 ```bash
-pip install 'autourgos-cua-coordinate-tool[capture]'   # auto-capture the screen
-pip install 'autourgos-cua-coordinate-tool[images]'    # auto-detect a given image's size
+pip install 'autourgos-cua-coordinate-tool[capture]'   # auto-capture the screen (mss)
+pip install 'autourgos-cua-coordinate-tool[images]'    # auto-detect a given image's size (Pillow)
 pip install 'autourgos-cua-coordinate-tool[all]'       # both
 ```
 
-Neither is required for the fully custom (caller-supplied image + dimensions) path.
+- `[capture]` is required for automatic screenshots (either use case).
+- `[images]` is only relevant to `CoordinateFinder`'s custom-screenshot path — it's
+  used to auto-detect a caller-supplied image's dimensions.
+- Neither is required for `CoordinateFinder`'s fully custom path (caller-supplied
+  image **and** explicit dimensions).
 
 ---
 
-## Quick Start
+## Use Case 1: `CoordinateFinder` (library)
+
+Call it directly from your own code. Every call takes an explicit `image` argument —
+omit it to auto-capture, or pass your own screenshot.
+
+### Automatic screenshot
+
+Auto-captures the current screen and auto-detects its dimensions — nothing to pass in.
 
 ```python
 from autourgos_cua_coordinate_tool import CoordinateFinder, CoordinateNotFoundError
@@ -97,85 +73,101 @@ llm = OpenAIChatModel(model="gpt-4o")
 finder = CoordinateFinder(llm)
 
 try:
-    coord = finder.find("the search input box")   # auto-captures the current screen
+    coord = finder.find("the search input box")
 except CoordinateNotFoundError as exc:
     print("not found:", exc)
 else:
-    x_px, y_px = coord.to_pixels()                 # dimensions auto-detected from the capture
+    x_px, y_px = coord.to_pixels()
     print(f"click at ({x_px}, {y_px})")
 ```
 
-Works the same with `autourgos-responses` model instances, or any object that
-exposes `invoke(prompt, files=, **overrides)` / `ainvoke(...)`.
+### Custom screenshot
 
----
-
-## Automatic vs Custom
-
-`find(description, image=None, *, screen_width=None, screen_height=None, **overrides)`
-supports both, and you can mix them freely:
-
-| `image` | `screen_width`/`screen_height` | Behavior |
-|---|---|---|
-| omitted (`None`) | omitted | **Fully automatic** — captures the current screen (`mss`), dimensions come free from the capture. |
-| omitted (`None`) | given | Auto-captures the screen, but forces pixel conversion against the dimensions you passed. |
-| given | omitted | **Custom screenshot**, dimensions auto-detected from it via Pillow if installed (falls back to `None` if not — `to_pixels()` then needs explicit dimensions). |
-| given | given | **Fully custom** — no auto-capture, no auto-detection. |
+Pass a specific screenshot (file path or bytes). Dimensions are auto-detected from it
+via Pillow if installed, or you can force them explicitly.
 
 ```python
-# Fully automatic
-coord = finder.find("the Submit button")
+from autourgos_cua_coordinate_tool import CoordinateFinder
+from autourgos_openaichat import OpenAIChatModel
 
-# Custom screenshot, automatic dimensions (via Pillow)
+llm = OpenAIChatModel(model="gpt-4o")
+finder = CoordinateFinder(llm)
+
+# Dimensions auto-detected from the image (needs Pillow).
 coord = finder.find("the Submit button", "screenshot.png")
+x_px, y_px = coord.to_pixels()
 
-# Automatic screenshot, custom (forced) dimensions
-coord = finder.find("the Submit button", screen_width=2560, screen_height=1440)
-
-# Fully custom
+# Or force explicit dimensions instead.
 coord = finder.find("the Submit button", "screenshot.png", screen_width=1920, screen_height=1080)
+x_px, y_px = coord.to_pixels()
 ```
 
----
-
-## Async
+You can also force dimensions on an auto-captured screenshot:
 
 ```python
-coord = await finder.afind("the Submit button")   # auto-capture works here too
+coord = finder.find("the Submit button", screen_width=2560, screen_height=1440)
+```
+
+### Async
+
+`afind()` mirrors `find()` exactly, for both the automatic and custom paths.
+
+```python
+coord = await finder.afind("the Submit button")                    # automatic
+coord = await finder.afind("the Submit button", "screenshot.png")  # custom
+```
+
+### Error handling
+
+`find()`/`afind()` raise `CoordinateNotFoundError` — never a guessed coordinate — when:
+
+- the model explicitly reports the element isn't visible,
+- the response can't be parsed into a coordinate at all, or
+- a parsed coordinate falls outside the 0-1000 range.
+
+Auto-capture (`image=None`) raises `CaptureError` instead if the optional `mss`
+dependency isn't installed.
+
+```python
+from autourgos_cua_coordinate_tool import CoordinateNotFoundError, CaptureError
+
+try:
+    coord = finder.find("a button that isn't there")
+except CoordinateNotFoundError as exc:
+    print("model couldn't find it:", exc)
+except CaptureError as exc:
+    print("auto-capture unavailable:", exc)
 ```
 
 ---
 
-## As an Agent Tool
+## Use Case 2: `CoordinateFinderTool` (agent tool)
+
+For `autourgos-agent`. Construct it with your LLM and hand it straight to
+`agent.add_tools(...)` — that's the whole surface, nothing else to configure.
 
 ```python
 from autourgos_agent import Agent
-from autourgos_cua_coordinate_tool import CoordinateFinder, make_find_coordinates_tool
-
-finder = CoordinateFinder(llm)
-
-# Fully automatic (auto-captures the screen, auto-detects dimensions):
-find_coordinates = make_find_coordinates_tool(finder)
-
-# Custom instead:
-find_coordinates = make_find_coordinates_tool(
-    finder,
-    screen_width=1920,
-    screen_height=1080,
-    screenshot_path="/tmp/screen.png",  # default when the agent omits image_path;
-                                         # can also be a zero-arg callable for a
-                                         # fresh path each call
-)
+from autourgos_cua_coordinate_tool import CoordinateFinderTool
 
 agent = Agent(llm=my_llm)
-agent.add_tools(find_coordinates)
+agent.add_tools(CoordinateFinderTool(my_llm))
+
 result = agent.invoke("Click the Submit button")
 ```
 
-The tool returns a dict: `{"found": True, "x_norm": ..., "y_norm": ..., "x": ..., "y": ...}`
-(pixel `x`/`y` only present when dimensions were configured or auto-detected), or
-`{"found": False, "error": "..."}` — including when auto-capture is requested but
-`mss` isn't installed.
+Every call auto-captures the current screen straight into memory (no temp file) and
+asks the LLM to locate a `target` description in it. The tool has a fixed name
+(`find_coordinates`) and description telling the calling LLM it self-captures the
+screen and returns pixel coordinates automatically — nothing to configure.
+
+It returns a dict:
+
+```python
+{"found": True, "x_norm": 512.0, "y_norm": 780.0, "x": 983, "y": 843}
+# or, if not found / mss isn't installed:
+{"found": False, "error": "..."}
+```
 
 ---
 
@@ -193,20 +185,6 @@ actual_y = int(y_norm / 1000 * screen_height)
 `Coordinate.to_pixels(screen_width=None, screen_height=None)` implements this exactly —
 pass dimensions explicitly to force them (custom), or omit both to use whatever was
 auto-detected when the `Coordinate` was found (automatic).
-
----
-
-## Error Handling
-
-`CoordinateFinder.find()`/`afind()` raise `CoordinateNotFoundError` — never a
-guessed coordinate — when:
-
-- the model explicitly reports the element isn't visible,
-- the response can't be parsed into a coordinate at all, or
-- a parsed coordinate falls outside the 0-1000 range.
-
-Auto-capture (`image=None`) raises `CaptureError` instead if the optional `mss`
-dependency isn't installed.
 
 ---
 
@@ -229,10 +207,12 @@ dependency isn't installed.
   passed) dimensions at find() time, if any
 - `to_pixels(screen_width=None, screen_height=None) -> (int, int)`
 
-### `make_find_coordinates_tool(finder, *, screenshot_path=None, screen_width=None, screen_height=None, name="find_coordinates") -> Tool`
+### `CoordinateFinderTool(llm, *, image_detail=None) -> Tool`
 
-Builds a `find_coordinates(description, image_path=None)` tool bound to `finder`.
-`image_path` omitted (and no `screenshot_path` configured) auto-captures the screen.
+A `find_coordinates(target)` tool bound to `llm`, with a fixed name and
+description stating what it does: it auto-captures the current screen and
+returns pixel coordinates for the described element, scaled to the actual
+screen size.
 
 ### `capture_screen() -> ScreenCapture` / `detect_image_size(image) -> Optional[(int, int)]`
 

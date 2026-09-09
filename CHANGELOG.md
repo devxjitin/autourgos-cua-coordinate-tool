@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1] - 2026-09-09
+
+- `CoordinateFinderTool`'s `name`/`description` are now fixed (no `name=`/`description=` constructor overrides) -- the tool's description explicitly states what it does: it automatically takes a screenshot of the current screen and returns pixel coordinates for the described element, scaled to the actual screen size, so a calling LLM doesn't need to be told this out of band.
+
+## [1.2.0] - 2026-09-09
+
+- **Breaking:** replaced `make_find_coordinates_tool(finder, *, screenshot_path=, allowed_dirs=, screen_width=, screen_height=, name=)` with `CoordinateFinderTool(llm, *, name=, image_detail=)`. The generated tool now takes a single `target` argument (was `description`/`image_path`) and always auto-captures the current screen straight into memory -- no `screenshot_path`, `allowed_dirs`, or LLM-supplied `image_path` to validate. Anyone needing a specific screenshot/dimensions should drive `CoordinateFinder.find()`/`afind()` directly.
+
 ## [1.1.0] - 2026-09-09
 
 - **Security fix:** `find_coordinates(image_path=...)` was an LLM-callable, unvalidated local file path forwarded straight to the vision API -- a prompt-injectable arbitrary-local-file-read-and-exfiltrate primitive. `image_path` must now resolve inside a configured `allowed_dirs` (or `screenshot_path`'s own directory) and have an image extension, or the call is rejected. **Breaking:** an explicit `image_path` now requires `allowed_dirs=`/`screenshot_path=` to be configured on `make_find_coordinates_tool()`; previously any path was accepted.

@@ -25,24 +25,23 @@ Quick start::
     coord = finder.find("the Submit button", "screenshot.png")
     x_px, y_px = coord.to_pixels(1920, 1080)
 
-    # Or as an agent tool (auto-capture/auto-detect by default):
-    tool = make_find_coordinates_tool(finder)
-    agent.add_tools(tool)
+    # Or as an agent tool (always auto-captures the screen into memory):
+    agent.add_tools(CoordinateFinderTool(llm))
 """
 
 from .capture import CaptureError, ScreenCapture, capture_screen, detect_image_size
 from .locator import Coordinate, CoordinateFinder, CoordinateNotFoundError
-from .tool import make_find_coordinates_tool
+from .tool import CoordinateFinderTool
 
 from autourgos_core import package_version
 
-__version__ = package_version("autourgos-cua-coordinate-tool", fallback="1.1.0")
+__version__ = package_version("autourgos-cua-coordinate-tool", fallback="1.2.1")
 
 __all__ = [
     "Coordinate",
     "CoordinateFinder",
     "CoordinateNotFoundError",
-    "make_find_coordinates_tool",
+    "CoordinateFinderTool",
     "CaptureError",
     "ScreenCapture",
     "capture_screen",
